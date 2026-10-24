@@ -108,6 +108,7 @@ struct snx_recompiled {
     size_t entry_count;
     SnxCompiledFunction* compiled_functions;
     size_t compiled_function_count;
+    char* jit_cache_path;
     struct snx_recompiler* arena_owner; /* PowerPC64: the recompiler whose arena holds the module's code */
     char opt;
     SnxU64 features; /* the recompiler's when the module was made: its JIT decodes as its code was */
@@ -280,6 +281,7 @@ static SnxJitService* module_jit(struct snx_recompiled* m) {
     config.opt = m->opt;
     config.features = m->features;
     config.hook_direct_calls = m->hook_direct_calls;
+    config.cache_path = m->jit_cache_path;
     s = snx_jit_service_new(&config, error, sizeof(error));
     if (!__atomic_compare_exchange_n(&m->jit, &expected, s ? s : JIT_NONE, 0, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
         snx_jit_service_free(s);
@@ -1207,6 +1209,9 @@ static struct snx_recompiled* recompile(struct snx_recompiler* r, struct snx_rec
     size_t i, j = 0;
     m->functions = codegen->function_count;
     m->hook_direct_calls = codegen->hook_direct_calls;
+    /* The module JIT shares ScarletNX runtime's append-only cache format. One file per guest cache
+       directory lets primary misses reuse compiled units without producing one DLL per function. */
+    if (r->cache && m->view_count) m->jit_cache_path = snx_path_join(r->cache, "library-jit.cache");
     rc = recompile_llvm(r, m, codegen);
     if (!rc && m->functions) {
         m->compiled_functions = (SnxCompiledFunction*)calloc(m->functions, sizeof(*m->compiled_functions));
@@ -1346,6 +1351,7 @@ void snx_recompiled_free(struct snx_recompiled* m) {
     }
     if (m->jit && m->jit != JIT_NONE)
         snx_jit_service_free(m->jit); /* its threads stop before the code they read goes */
+    free(m->jit_cache_path);
     free(m->views);
     free(m->compiled_functions);
     if (m->dispatch) free((void**)m->dispatch - 1); /* load_descriptor's block, with the module in front */

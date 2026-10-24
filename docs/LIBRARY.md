@@ -146,7 +146,10 @@ address and runs it, as the Linux runtime (`src/gnuabi/runtime/jit.c`) does. A c
 keeps `snx_runtime_defaults`' miss can instead name that handler with
 `snx_recompiled_set_fallback`, which the module's misses then run instead of its own JIT. `snx_recompiler_set_cache` names a
 folder that keeps linked modules (LLVM) by a hash of everything they are made from, and
-the compiled runtime library: a module found there is loaded instead of compiled.
+the compiled runtime library: a module found there is loaded instead of compiled. When a
+module starts its lazy JIT, it also uses `library-jit.cache` in this folder. The JIT cache
+uses ScarletNX's runtime format: it batches queued misses on worker threads and reuses
+individual compiled units when their guest code and addresses match.
 `snx_recompiled_invalidate` retires every compiled function whose discovered source span
 overlaps the changed guest range, clears its dispatch leaders, and invalidates overlapping
 lazy-JIT units. Native code stays mapped for CPUs already executing it. Its optional
