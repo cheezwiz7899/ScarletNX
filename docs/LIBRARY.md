@@ -84,7 +84,10 @@ The recompiler also takes the `-O` level (`snx_recompiler_set_optimization`, `2`
 default), how many code units compile at once (`snx_recompiler_set_jobs`, on
 threads),
 progress lines (`snx_recompiler_set_verbose`) and a folder to save the generated
-code's text in (`snx_recompiler_set_keep_ir`).
+code's text in (`snx_recompiler_set_keep_ir`). `snx_recompiler_set_hook_direct_calls`
+routes calls between discovered functions through the CPU's dispatch table. Enable it
+when the runtime can invalidate guest code, so callers do not retain direct pointers to
+retired functions.
 
 `snx_recompiler_set_a64_target` chooses the A64 features of the guest's CPU, which
 decide what the decoder (`tools/a64dec`, from QEMU's `a64.decode`) accepts: an
@@ -144,6 +147,12 @@ keeps `snx_runtime_defaults`' miss can instead name that handler with
 `snx_recompiled_set_fallback`, which the module's misses then run instead of its own JIT. `snx_recompiler_set_cache` names a
 folder that keeps linked modules (LLVM) by a hash of everything they are made from, and
 the compiled runtime library: a module found there is loaded instead of compiled.
+`snx_recompiled_invalidate` retires every compiled function whose discovered source span
+overlaps the changed guest range, clears its dispatch leaders, and invalidates overlapping
+lazy-JIT units. Native code stays mapped for CPUs already executing it. Its optional
+callback receives the invalidated function ranges so an embedder can clear its own dispatch
+table. Use a live-code fallback if future misses must compile from current guest memory
+instead of the module's original input snapshot.
 
 For A32 and Thumb, `snx_recompile32` prepares an address range whose blocks are compiled
 on first use by the LLVM block compiler (`src/common/cpu/arm/`), and
