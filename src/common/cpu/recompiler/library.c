@@ -73,6 +73,8 @@ struct snx_recompiler {
     SnxU64 features; /* the guest's A64 features (a64_decoder.h): SNX_A64_TARGET_SWITCH or SNX_A64_TARGET_MAX */
     unsigned jobs;
     int verbose;
+    snx_recompiler_log_callback log_callback;
+    void* log_user_data;
     char* keep_ir;
     char* cache; /* folder of linked modules by the hash of what they were made from (LLVM), NULL for none */
     char error[1024];
@@ -199,6 +201,10 @@ int snx_recompiler_set_a64_target(struct snx_recompiler* r, int target) {
 
 void snx_recompiler_set_jobs(struct snx_recompiler* r, unsigned jobs) { r->jobs = jobs; }
 void snx_recompiler_set_verbose(struct snx_recompiler* r, int verbose) { r->verbose = verbose; }
+void snx_recompiler_set_log_callback(struct snx_recompiler* r, snx_recompiler_log_callback callback, void* user_data) {
+    r->log_callback = callback;
+    r->log_user_data = user_data;
+}
 
 int snx_recompiler_set_keep_ir(struct snx_recompiler* r, const char* folder) {
     char* copy = NULL;
@@ -421,6 +427,18 @@ static void report(struct snx_recompiler* r, const char* fmt, ...) {
     va_list ap;
     if (!r->verbose) return;
     va_start(ap, fmt);
+    if (r->log_callback) {
+        char line[2048]; /* the callback's lines are cut here, stdout's are not */
+        va_list callback_args;
+        va_copy(callback_args, ap);
+        vprintf(fmt, ap);
+        va_end(ap);
+        fflush(stdout);
+        vsnprintf(line, sizeof(line), fmt, callback_args);
+        va_end(callback_args);
+        r->log_callback(line, r->log_user_data);
+        return;
+    }
     vprintf(fmt, ap);
     va_end(ap);
     fflush(stdout);
@@ -1234,7 +1252,7 @@ struct snx_recompiled* snx_recompile_ranges(struct snx_recompiler* r, const stru
         return NULL;
     }
     memset(&codegen, 0, sizeof(codegen));
-    if (snx_codegen_analyze(&codegen, views, range_count, hints, hint_count, !r->verbose, r->features)) {
+    if (snx_codegen_analyze(&codegen, views, range_count, hints, hint_count, 1, r->features)) {
         fail(r, "function discovery failed in 0x%llx-0x%llx", (unsigned long long)ranges[0].address,
              (unsigned long long)(ranges[range_count - 1].address + ranges[range_count - 1].size));
         free(views);
@@ -1243,6 +1261,8 @@ struct snx_recompiled* snx_recompile_ranges(struct snx_recompiler* r, const stru
         return NULL;
     }
     free(views);
+    report(r, "%lu functions, %lu instructions\n", (unsigned long)codegen.function_count,
+           (unsigned long)codegen.instruction_count);
     return recompile(r, m, &codegen);
 }
 

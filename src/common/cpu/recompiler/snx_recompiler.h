@@ -51,6 +51,8 @@ extern "C" {
 #define SNX_RECOMPILER_FLAG_LLVM 1
 
 struct snx_recompiler;
+/* One progress line, as printed, ending in a newline */
+typedef void (*snx_recompiler_log_callback)(const char* line, void* user_data);
 
 /* NULL when the flags name no usable backend or the backend cannot target this host (snx_recompiler_has) */
 SNX_RECOMPILER_API struct snx_recompiler* snx_recompiler_new(int flags);
@@ -79,6 +81,11 @@ SNX_RECOMPILER_API int snx_recompiler_set_a64_target(struct snx_recompiler* r, i
 SNX_RECOMPILER_API void snx_recompiler_set_jobs(struct snx_recompiler* r, unsigned jobs);
 /* Progress lines on stdout, as the scarletnx command prints them; off by default */
 SNX_RECOMPILER_API void snx_recompiler_set_verbose(struct snx_recompiler* r, int verbose);
+/* The callback gets each progress line that snx_recompiler_set_verbose prints, which still goes to stdout too, so it
+   does nothing while verbose is off. It may run on a compiler worker thread, with an internal lock held: keep it short
+   and never call this recompiler from it. A line is cut at 2047 bytes for the callback. NULL removes it */
+SNX_RECOMPILER_API void snx_recompiler_set_log_callback(struct snx_recompiler* r, snx_recompiler_log_callback callback,
+                                                        void* user_data);
 /* A folder the generated code's text (LLVM IR as .ll) is saved in, for inspection; NULL (the
    default) saves nothing. The string is copied */
 SNX_RECOMPILER_API int snx_recompiler_set_keep_ir(struct snx_recompiler* r, const char* folder);

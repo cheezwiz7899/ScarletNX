@@ -83,8 +83,12 @@ snx_recompiler_free(r);
 The recompiler also takes the `-O` level (`snx_recompiler_set_optimization`, `2` by
 default), how many code units compile at once (`snx_recompiler_set_jobs`, on
 threads),
-progress lines (`snx_recompiler_set_verbose`) and a folder to save the generated
-code's text in (`snx_recompiler_set_keep_ir`).
+progress lines (`snx_recompiler_set_verbose`), an optional callback for those same
+lines (`snx_recompiler_set_log_callback`) and a folder to save the generated code's
+text in (`snx_recompiler_set_keep_ir`). The callback only gets lines while verbose is
+on, and the lines still go to stdout. It runs on the emitting thread, which may be a
+compiler worker holding an internal lock, so it stays short and does not call back
+into the recompiler.
 
 `snx_recompiler_set_a64_target` chooses the A64 features of the guest's CPU, which
 decide what the decoder (`tools/a64dec`, from QEMU's `a64.decode`) accepts: an

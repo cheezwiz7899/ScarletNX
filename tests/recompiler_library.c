@@ -94,6 +94,33 @@ static uint64_t read64(const uint8_t* p) {
     return v;
 }
 
+/* the log callback: lines arrive with the user data, only while verbose is on */
+typedef struct {
+    unsigned lines, summaries;
+} Log;
+static void on_log(const char* line, void* user_data) {
+    Log* log = (Log*)user_data;
+    ++log->lines;
+    if (strstr(line, " functions, ") && strstr(line, " instructions")) ++log->summaries;
+}
+static void log_callback(struct snx_recompiler* r, uint8_t* mem, int verbose) {
+    struct snx_recompiled* m;
+    Log log = {0, 0};
+    snx_recompiler_set_log_callback(r, on_log, &log);
+    snx_recompiler_set_verbose(r, 0);
+    m = snx_recompile(r, CODE64, mem + CODE64, A64_SIZE);
+    check(m != NULL, "the log callback: compile with verbose off");
+    check(log.lines == 0, "the log callback hears nothing while verbose is off");
+    if (m) snx_recompiled_free(m);
+    snx_recompiler_set_verbose(r, 1);
+    m = snx_recompile(r, CODE64, mem + CODE64, A64_SIZE);
+    check(m != NULL, "the log callback: compile with verbose on");
+    check(log.lines > 0 && log.summaries == 1, "the log callback gets the progress lines, one function summary");
+    if (m) snx_recompiled_free(m);
+    snx_recompiler_set_log_callback(r, NULL, NULL);
+    snx_recompiler_set_verbose(r, verbose);
+}
+
 static void run64(struct snx_recompiler* r, const char* backend, uint8_t* mem, const char* keep_ir) {
     struct snx_recompiled *m, *first;
     RtAPI rt;
@@ -273,6 +300,7 @@ int main(int argc, char** argv) {
                   snx_recompiler_set_a64_target(r, SNX_RECOMPILER_A64_SWITCH) == 0,
               "the Switch and max A64 targets");
         snx_recompiler_set_jobs(r, 2);
+        log_callback(r, mem, verbose);
         run64(r, "llvm", mem, keep_ir);
         run32(r, mem);
         snx_recompiler_free(r);
